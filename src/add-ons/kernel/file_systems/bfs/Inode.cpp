@@ -357,10 +357,6 @@ Inode::Inode(Volume* volume, ino_t id)
 
 	if (IsContainer())
 		fTree = new(std::nothrow) BPlusTree(this);
-	if (NeedsFileCache()) {
-		SetFileCache(file_cache_create(fVolume->ID(), ID(), Size()));
-		SetMap(file_map_create(volume->ID(), ID(), Size()));
-	}
 }
 
 
@@ -407,8 +403,11 @@ Inode::~Inode()
 {
 	PRINT(("Inode::~Inode() @ %p\n", this));
 
-	file_cache_delete(FileCache());
-	file_map_delete(Map());
+	if (FileCache() != NULL)
+		file_cache_delete(FileCache());
+	if (Map() != NULL)
+		file_map_delete(Map());
+
 	delete fTree;
 
 	rw_lock_destroy(&fLock);
@@ -443,9 +442,6 @@ Inode::InitCheck(bool checkNode) const
 			RETURN_ERROR(B_BAD_DATA);
 		}
 	}
-
-	if (NeedsFileCache() && (fCache == NULL || fMap == NULL))
-		return B_NO_MEMORY;
 
 	return B_OK;
 }
@@ -538,6 +534,28 @@ Inode::CheckPermissions(int accessMode) const
 }
 
 
+status_t
+Inode::CreateFileCacheAndMapIfNeeded()
+{
+	if (!NeedsFileCache())
+		return B_OK;
+
+	if (FileCache() == NULL) {
+		SetFileCache(file_cache_create(fVolume->ID(), ID(), Size()));
+		if (FileCache() == NULL)
+			return B_NO_MEMORY;
+	}
+
+	if (Map() == NULL) {
+		SetMap(file_map_create(fVolume->ID(), ID(), Size()));
+		if (Map() == NULL)
+			return B_NO_MEMORY;
+	}
+
+	return B_OK;
+}
+
+
 //	#pragma mark - attributes
 
 
@@ -598,6 +616,10 @@ Inode::_MakeSpaceForSmallData(Transaction& transaction, bfs_inode* node,
 		Inode* attribute;
 		status_t status = CreateAttribute(transaction, item->Name(),
 			item->Type(), &attribute);
+		if (status != B_OK)
+			RETURN_ERROR(status);
+
+		status = attribute->CreateFileCacheAndMapIfNeeded();
 		if (status != B_OK)
 			RETURN_ERROR(status);
 
@@ -1136,6 +1158,10 @@ Inode::WriteAttribute(Transaction& transaction, const char* name, int32 type,
 
 			if (status == B_OK)
 				status = CreateAttribute(transaction, name, type, &attribute);
+			if (status != B_OK)
+				RETURN_ERROR(status);
+
+			status = attribute->CreateFileCacheAndMapIfNeeded();
 			if (status != B_OK)
 				RETURN_ERROR(status);
 
@@ -2769,15 +2795,9 @@ Inode::Create(Transaction& transaction, Inode* parent, const char* name,
 	if (inode->InLastModifiedIndex())
 		index.InsertLastModified(transaction, inode);
 
-	if (inode->NeedsFileCache()) {
-		inode->SetFileCache(file_cache_create(volume->ID(), inode->ID(),
-			inode->Size()));
-		inode->SetMap(file_map_create(volume->ID(), inode->ID(),
-			inode->Size()));
-
-		if (inode->FileCache() == NULL || inode->Map() == NULL)
-			return B_NO_MEMORY;
-	}
+	status = inode->CreateFileCacheAndMapIfNeeded();
+	if (status != B_OK)
+		return status;
 
 	// Everything worked well until this point, we have a fully
 	// initialized inode, and we want to keep it

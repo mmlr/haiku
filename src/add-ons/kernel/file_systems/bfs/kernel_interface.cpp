@@ -1297,6 +1297,10 @@ bfs_open(fs_volume* _volume, fs_vnode* _node, int openMode, void** _cookie)
 	if (status != B_OK)
 		RETURN_ERROR(status);
 
+	status = inode->CreateFileCacheAndMapIfNeeded();
+	if (status != B_OK)
+		RETURN_ERROR(status);
+
 	file_cookie* cookie = new(std::nothrow) file_cookie;
 	if (cookie == NULL)
 		RETURN_ERROR(B_NO_MEMORY);

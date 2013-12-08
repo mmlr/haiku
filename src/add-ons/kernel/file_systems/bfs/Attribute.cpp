@@ -134,6 +134,14 @@ Attribute::Create(const char* name, type_code type, int openMode,
 
 	if (Get(name) == B_OK) {
 		// attribute already exists
+		if (fAttribute != NULL) {
+			status  = fAttribute->CreateFileCacheAndMapIfNeeded();
+			if (status != B_OK) {
+				delete cookie;
+				return status;
+			}
+		}
+
 		if ((openMode & O_TRUNC) != 0)
 			_Truncate();
 	}
@@ -152,6 +160,12 @@ Attribute::Open(const char* name, int openMode, attr_cookie** _cookie)
 	status = Get(name);
 	if (status < B_OK)
 		return status;
+
+	if (fAttribute != NULL) {
+		status = fAttribute->CreateFileCacheAndMapIfNeeded();
+		if (status != B_OK)
+			return status;
+	}
 
 	attr_cookie* cookie = new(std::nothrow) attr_cookie;
 	if (cookie == NULL)

@@ -80,6 +80,9 @@ public:
 									{ return IsFile() || IsAttribute()
 										|| IsLongSymLink(); }
 
+			status_t			CreateFileCacheAndMapIfNeeded();
+
+
 			bool				IsDeleted() const
 									{ return (Flags() & INODE_DELETED) != 0; }
 
