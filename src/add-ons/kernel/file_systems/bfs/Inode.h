@@ -80,8 +80,7 @@ public:
 									{ return IsFile() || IsAttribute()
 										|| IsLongSymLink(); }
 
-			status_t			CreateFileCacheAndMapIfNeeded();
-
+			status_t			CreateFileCacheAndMapIfNeeded(bool locked);
 
 			bool				IsDeleted() const
 									{ return (Flags() & INODE_DELETED) != 0; }
@@ -213,6 +212,8 @@ private:
 
 	friend class AttributeIterator;
 	friend class InodeAllocator;
+
+			status_t			_CreateFileCacheAndMap();
 
 			// small_data access methods
 			status_t			_MakeSpaceForSmallData(Transaction& transaction,

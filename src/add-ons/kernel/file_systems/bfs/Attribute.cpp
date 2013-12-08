@@ -135,7 +135,7 @@ Attribute::Create(const char* name, type_code type, int openMode,
 	if (Get(name) == B_OK) {
 		// attribute already exists
 		if (fAttribute != NULL) {
-			status  = fAttribute->CreateFileCacheAndMapIfNeeded();
+			status = fAttribute->CreateFileCacheAndMapIfNeeded(false);
 			if (status != B_OK) {
 				delete cookie;
 				return status;
@@ -162,7 +162,7 @@ Attribute::Open(const char* name, int openMode, attr_cookie** _cookie)
 		return status;
 
 	if (fAttribute != NULL) {
-		status = fAttribute->CreateFileCacheAndMapIfNeeded();
+		status = fAttribute->CreateFileCacheAndMapIfNeeded(false);
 		if (status != B_OK)
 			return status;
 	}

@@ -535,10 +535,9 @@ Inode::CheckPermissions(int accessMode) const
 
 
 status_t
-Inode::CreateFileCacheAndMapIfNeeded()
+Inode::_CreateFileCacheAndMap()
 {
-	if (!NeedsFileCache())
-		return B_OK;
+	ASSERT_WRITE_LOCKED_INODE(this);
 
 	if (FileCache() == NULL) {
 		SetFileCache(file_cache_create(fVolume->ID(), ID(), Size()));
@@ -553,6 +552,25 @@ Inode::CreateFileCacheAndMapIfNeeded()
 	}
 
 	return B_OK;
+}
+
+
+status_t
+Inode::CreateFileCacheAndMapIfNeeded(bool locked)
+{
+	if (!NeedsFileCache() || (FileCache() != NULL && Map() != NULL))
+		return B_OK;
+
+	if (locked)
+		return _CreateFileCacheAndMap();
+
+	WriteLocker locker(fLock);
+	if (FileCache() != NULL && Map() != NULL) {
+		// Someone already created the cache and map in the meantime.
+		return B_OK;
+	}
+
+	return _CreateFileCacheAndMap();
 }
 
 
@@ -619,7 +637,7 @@ Inode::_MakeSpaceForSmallData(Transaction& transaction, bfs_inode* node,
 		if (status != B_OK)
 			RETURN_ERROR(status);
 
-		status = attribute->CreateFileCacheAndMapIfNeeded();
+		status = attribute->CreateFileCacheAndMapIfNeeded(true);
 		if (status != B_OK)
 			RETURN_ERROR(status);
 
@@ -1161,7 +1179,7 @@ Inode::WriteAttribute(Transaction& transaction, const char* name, int32 type,
 			if (status != B_OK)
 				RETURN_ERROR(status);
 
-			status = attribute->CreateFileCacheAndMapIfNeeded();
+			status = attribute->CreateFileCacheAndMapIfNeeded(true);
 			if (status != B_OK)
 				RETURN_ERROR(status);
 
@@ -2659,6 +2677,10 @@ Inode::Create(Transaction& transaction, Inode* parent, const char* name,
 					| ((openMode & O_TRUNC) != 0 ? W_OK : 0)) != B_OK)
 				return B_NOT_ALLOWED;
 
+			status = inode->CreateFileCacheAndMapIfNeeded(false);
+			if (status != B_OK)
+				return status;
+
 			if ((openMode & O_TRUNC) != 0) {
 				// truncate the existing file
 				inode->WriteLockInTransaction(transaction);
@@ -2795,7 +2817,7 @@ Inode::Create(Transaction& transaction, Inode* parent, const char* name,
 	if (inode->InLastModifiedIndex())
 		index.InsertLastModified(transaction, inode);
 
-	status = inode->CreateFileCacheAndMapIfNeeded();
+	status = inode->CreateFileCacheAndMapIfNeeded(true);
 	if (status != B_OK)
 		return status;
 
